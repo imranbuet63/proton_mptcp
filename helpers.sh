@@ -76,7 +76,7 @@ _ksetup_functions+=(
 )
 
 # Get kernel repository root for later use
-kroot="$PWD/$(dirname "$0")"
+kroot="$PWD/$(dirname -- "$0")"
 
 # Show an informational message
 function msg() {
@@ -150,7 +150,7 @@ Proton Kernel for Pixel 5 & 4a 5G
 EOF
 
 	# Ensure that the directory containing $fn exists but $fn doesn't
-	mkdir -p "$(dirname "$fn")"
+	mkdir -p "$(dirname -- "$fn")"
 	rm -f "$fn"
 
 	echo "  IMG     $fn"

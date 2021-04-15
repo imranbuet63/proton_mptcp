@@ -23,6 +23,7 @@
 #include <net/route.h>
 #include <net/tcp_states.h>
 #include <net/xfrm.h>
+#include <net/mptcp.h>
 #include <net/tcp.h>
 #include <net/sock_reuseport.h>
 #include <net/addrconf.h>
@@ -285,58 +286,56 @@ static inline int sk_reuseport_match(struct inet_bind_bucket *tb,
 				    ipv6_only_sock(sk), true, false);
 }
 
-/* Obtain a reference to a local port for the given sock,
- * if snum is zero it means select any available local port.
- * We try to allocate an odd port (and leave even ports for connect())
- */
-int inet_csk_get_port(struct sock *sk, unsigned short snum)
+void inet_csk_update_fastreuse(struct inet_bind_bucket *tb,
+			       struct sock *sk)
 {
-	bool reuse = sk->sk_reuse && sk->sk_state != TCP_LISTEN;
-	struct inet_hashinfo *hinfo = sk->sk_prot->h.hashinfo;
-	int ret = 1, port = snum;
-	struct inet_bind_hashbucket *head;
-	struct net *net = sock_net(sk);
-	struct inet_bind_bucket *tb = NULL;
 	kuid_t uid = sock_i_uid(sk);
+	bool reuse = sk->sk_reuse && sk->sk_state != TCP_LISTEN;
+//	struct inet_hashinfo *hinfo = sk->sk_prot->h.hashinfo;
+//	int ret = 1, port = snum;
+//	struct inet_bind_hashbucket *head;
 
-	if (!port) {
-		head = inet_csk_find_open_port(sk, &tb, &port);
-		if (!head)
-			return ret;
-		if (!tb)
-			goto tb_not_found;
-		goto success;
-	}
-	head = &hinfo->bhash[inet_bhashfn(net, port,
-					  hinfo->bhash_size)];
-	spin_lock_bh(&head->lock);
+//	struct inet_bind_bucket *tb = NULL;
+//	kuid_t uid = sock_i_uid(sk);
 
-	if (inet_is_local_reserved_port(net, snum) &&
-	    !sysctl_reserved_port_bind) {
-		ret = 1;
-		goto fail_unlock;
-	}
+//	if (!port) {
+//		head = inet_csk_find_open_port(sk, &tb, &port);
+//		if (!head)
+//			return ret;
+//		if (!tb)
+//			goto tb_not_found;
+//		goto success;
+//	}
+//	head = &hinfo->bhash[inet_bhashfn(net, port,
+//					  hinfo->bhash_size)];
+//	spin_lock_bh(&head->lock);
+//
+//	if (inet_is_local_reserved_port(net, snum) &&
+//	    !sysctl_reserved_port_bind) {
+//		ret = 1;
+//		goto fail_unlock;
+//	}
 
-	inet_bind_bucket_for_each(tb, &head->chain)
-		if (net_eq(ib_net(tb), net) && tb->port == port)
-			goto tb_found;
-tb_not_found:
-	tb = inet_bind_bucket_create(hinfo->bind_bucket_cachep,
-				     net, head, port);
-	if (!tb)
-		goto fail_unlock;
-tb_found:
-	if (!hlist_empty(&tb->owners)) {
-		if (sk->sk_reuse == SK_FORCE_REUSE)
-			goto success;
-
-		if ((tb->fastreuse > 0 && reuse) ||
-		    sk_reuseport_match(tb, sk))
-			goto success;
-		if (inet_csk_bind_conflict(sk, tb, true, true))
-			goto fail_unlock;
-	}
-success:
+//	inet_bind_bucket_for_each(tb, &head->chain)
+//		if (net_eq(ib_net(tb), net) && tb->port == port)
+//			goto tb_found;
+//tb_not_found:
+//	tb = inet_bind_bucket_create(hinfo->bind_bucket_cachep,
+//				     net, head, port);
+//	if (!tb)
+//		goto fail_unlock;
+//tb_found:
+//	if (!hlist_empty(&tb->owners)) {
+//		if (sk->sk_reuse == SK_FORCE_REUSE)
+//			goto success;
+//
+//		if ((tb->fastreuse > 0 && reuse) ||
+//		    sk_reuseport_match(tb, sk))
+//			goto success;
+//		if (inet_csk_bind_conflict(sk, tb, true, true))
+//			goto fail_unlock;
+//	}
+//success:
 	if (hlist_empty(&tb->owners)) {
 		tb->fastreuse = reuse;
 		if (sk->sk_reuseport) {
@@ -380,6 +379,54 @@ success:
 			tb->fastreuseport = 0;
 		}
 	}
+}
+
+/* Obtain a reference to a local port for the given sock,
+ * if snum is zero it means select any available local port.
+ * We try to allocate an odd port (and leave even ports for connect())
+ */
+int inet_csk_get_port(struct sock *sk, unsigned short snum)
+{
+	bool reuse = sk->sk_reuse && sk->sk_state != TCP_LISTEN;
+	struct inet_hashinfo *hinfo = sk->sk_prot->h.hashinfo;
+	int ret = 1, port = snum;
+	struct inet_bind_hashbucket *head;
+	struct net *net = sock_net(sk);
+	struct inet_bind_bucket *tb = NULL;
+
+	if (!port) {
+		head = inet_csk_find_open_port(sk, &tb, &port);
+		if (!head)
+			return ret;
+		if (!tb)
+			goto tb_not_found;
+		goto success;
+	}
+	head = &hinfo->bhash[inet_bhashfn(net, port,
+					  hinfo->bhash_size)];
+	spin_lock_bh(&head->lock);
+	inet_bind_bucket_for_each(tb, &head->chain)
+		if (net_eq(ib_net(tb), net) && tb->port == port)
+			goto tb_found;
+tb_not_found:
+	tb = inet_bind_bucket_create(hinfo->bind_bucket_cachep,
+				     net, head, port);
+	if (!tb)
+		goto fail_unlock;
+tb_found:
+	if (!hlist_empty(&tb->owners)) {
+		if (sk->sk_reuse == SK_FORCE_REUSE)
+			goto success;
+
+		if ((tb->fastreuse > 0 && reuse) ||
+		    sk_reuseport_match(tb, sk))
+			goto success;
+		if (inet_csk_bind_conflict(sk, tb, true, true))
+			goto fail_unlock;
+	}
+success:
+	inet_csk_update_fastreuse(tb, sk);
+
 	if (!inet_csk(sk)->icsk_bind_hash)
 		inet_bind_hash(sk, tb, port);
 	WARN_ON(inet_csk(sk)->icsk_bind_hash != tb);
@@ -723,7 +770,10 @@ static void reqsk_timer_handler(struct timer_list *t)
 	int max_retries, thresh;
 	u8 defer_accept;
 
-	if (inet_sk_state_load(sk_listener) != TCP_LISTEN)
+	if (!is_meta_sk(sk_listener) && inet_sk_state_load(sk_listener) != TCP_LISTEN)
+		goto drop;
+
+	if (is_meta_sk(sk_listener) && !mptcp_can_new_subflow(sk_listener))
 		goto drop;
 
 	max_retries = icsk->icsk_syn_retries ? : net->ipv4.sysctl_tcp_synack_retries;
@@ -816,7 +866,9 @@ struct sock *inet_csk_clone_lock(const struct sock *sk,
 				 const struct request_sock *req,
 				 const gfp_t priority)
 {
-	struct sock *newsk = sk_clone_lock(sk, priority);
+	struct sock *newsk;
+
+	newsk = sk_clone_lock(sk, priority);
 
 	if (newsk) {
 		struct inet_connection_sock *newicsk = inet_csk(newsk);
@@ -1016,7 +1068,14 @@ void inet_csk_listen_stop(struct sock *sk)
 	 */
 	while ((req = reqsk_queue_remove(queue, sk)) != NULL) {
 		struct sock *child = req->sk;
+		bool mutex_taken = false;
+		struct mptcp_cb *mpcb = tcp_sk(child)->mpcb;
 
+		if (is_meta_sk(child)) {
+			WARN_ON(refcount_inc_not_zero(&mpcb->mpcb_refcnt) == 0);
+			mutex_lock(&mpcb->mpcb_mutex);
+			mutex_taken = true;
+		}
 		local_bh_disable();
 		bh_lock_sock(child);
 		WARN_ON(sock_owned_by_user(child));
@@ -1026,6 +1085,10 @@ void inet_csk_listen_stop(struct sock *sk)
 		reqsk_put(req);
 		bh_unlock_sock(child);
 		local_bh_enable();
+		if (mutex_taken) {
+			mutex_unlock(&mpcb->mpcb_mutex);
+			mptcp_mpcb_put(mpcb);
+		}
 		sock_put(child);
 
 		cond_resched();

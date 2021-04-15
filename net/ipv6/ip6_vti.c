@@ -481,6 +481,10 @@ vti6_xmit(struct sk_buff *skb, struct net_device *dev, struct flowi *fl)
 		default:
 			goto tx_err_link_failure;
 		}
+<<<<<<< HEAD
+=======
+//		skb_dst_set(skb, dst);
+>>>>>>> 9ca1ffce99bfb15c5447a376a449780cd4c8b042
 	}
 
 	dst_hold(dst);
