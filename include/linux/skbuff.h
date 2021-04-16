@@ -1367,7 +1367,7 @@ static inline void skb_mark_not_on_list(struct sk_buff *skb)
 	skb->next = NULL;
 }
 
-* Iterate through singly-linked GSO fragments of an skb. */
+/* Iterate through singly-linked GSO fragments of an skb. */
 #define skb_list_walk_safe(first, skb, next_skb)                               
 	for ((skb) = (first), (next_skb) = (skb) ? (skb)->next : NULL; (skb);  
 	     (skb) = (next_skb), (next_skb) = (skb) ? (skb)->next : NULL)

@@ -760,10 +760,7 @@ static int tcp_v6_init_req(struct request_sock *req,
 			   struct sk_buff *skb,
 			   bool want_cookie)
 {
-<<<<<<< HEAD
-=======
 	//bool l3_slave = ipv6_l3mdev_skb(TCP_SKB_CB(skb)->header.h6.flags);
->>>>>>> 9ca1ffce99bfb15c5447a376a449780cd4c8b042
 	struct inet_request_sock *ireq = inet_rsk(req);
 	const struct ipv6_pinfo *np = inet6_sk(sk_listener);
 
