@@ -315,7 +315,7 @@ static int vti6_rcv(struct sk_buff *skb)
 
 		if (!xfrm6_policy_check(NULL, XFRM_POLICY_IN, skb)) {
 			rcu_read_unlock();
-			goto discard;
+			return 0;
 		}
 
 		ipv6h = ipv6_hdr(skb);
@@ -481,10 +481,8 @@ vti6_xmit(struct sk_buff *skb, struct net_device *dev, struct flowi *fl)
 		default:
 			goto tx_err_link_failure;
 		}
-<<<<<<< HEAD
-=======
+
 //		skb_dst_set(skb, dst);
->>>>>>> 9ca1ffce99bfb15c5447a376a449780cd4c8b042
 	}
 
 	dst_hold(dst);
