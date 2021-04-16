@@ -1716,10 +1716,7 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 		atomic_set(&newsk->sk_zckey, 0);
 
 		sock_reset_flag(newsk, SOCK_DONE);
-<<<<<<< HEAD
-=======
 		sock_reset_flag(newsk, SOCK_MPTCP);
->>>>>>> 9ca1ffce99bfb15c5447a376a449780cd4c8b042
 
 		/* sk->sk_memcg will be populated at accept() time */
 		newsk->sk_memcg = NULL;
