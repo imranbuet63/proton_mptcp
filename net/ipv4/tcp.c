@@ -528,11 +528,8 @@ static inline bool tcp_stream_is_readable(const struct tcp_sock *tp,
 			return true;
 		if (tcp_rmem_pressure(sk))
 			return true;
-<<<<<<< HEAD
-=======
 		if (tcp_receive_window(tp) <= inet_csk(sk)->icsk_ack.rcv_mss)
 			return true;
->>>>>>> 9ca1ffce99bfb15c5447a376a449780cd4c8b042
 	}
 	if (sk->sk_prot->stream_memory_read)
 		return sk->sk_prot->stream_memory_read(sk);
@@ -1867,10 +1864,7 @@ static int tcp_zerocopy_receive(struct sock *sk,
 
 	down_read(&current->mm->mmap_sem);
 
-<<<<<<< HEAD
-=======
 	//ret = -EINVAL;
->>>>>>> 9ca1ffce99bfb15c5447a376a449780cd4c8b042
 	vma = find_vma(current->mm, address);
 	if (!vma || vma->vm_start > address || vma->vm_ops != &tcp_vm_ops) {
 		up_read(&current->mm->mmap_sem);
@@ -2242,11 +2236,8 @@ skip_copy:
 			tp->urg_data = 0;
 			tcp_fast_path_check(sk);
 		}
-<<<<<<< HEAD
-=======
 		//if (used + offset < skb->len)
 		//	continue;
->>>>>>> 9ca1ffce99bfb15c5447a376a449780cd4c8b042
 
 		if (TCP_SKB_CB(skb)->has_rxtstamp) {
 			tcp_update_recv_tstamps(skb, &tss);
@@ -3206,14 +3197,10 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 #ifdef CONFIG_TCP_MD5SIG
 	case TCP_MD5SIG:
 	case TCP_MD5SIG_EXT:
-<<<<<<< HEAD
-		err = tp->af_specific->md5_parse(sk, optname, optval, optlen);
-=======
 		if (!sock_flag(sk, SOCK_MPTCP))
 			err = tp->af_specific->md5_parse(sk, optname, optval, optlen);
 		else
 			err = -EINVAL;
->>>>>>> 9ca1ffce99bfb15c5447a376a449780cd4c8b042
 		break;
 #endif
 	case TCP_USER_TIMEOUT:
@@ -4064,10 +4051,8 @@ int tcp_md5_hash_key(struct tcp_md5sig_pool *hp, const struct tcp_md5sig_key *ke
 	u8 keylen = READ_ONCE(key->keylen); /* paired with WRITE_ONCE() in tcp_md5_do_add */
 	struct scatterlist sg;
 
-	sg_init_one(&sg, key->key, keylen);
-	ahash_request_set_crypt(hp->md5_req, &sg, NULL, keylen);
-
-	/* tcp_md5_do_add() might change key->key under us */
+	sg_init_one(&sg, key->key, key->keylen);
+	ahash_request_set_crypt(hp->md5_req, &sg, NULL, key->keylen);
 	return crypto_ahash_update(hp->md5_req);
 }
 EXPORT_SYMBOL(tcp_md5_hash_key);

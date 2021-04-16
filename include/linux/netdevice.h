@@ -2330,6 +2330,9 @@ struct napi_gro_cb {
 	u8	is_fou:1;
 
 	/* Number of gro_receive callbacks this packet already went through */
+	u8	is_atomic:1;
+
+	/* Number of gro_receive callbacks this packet already went through */
 	u8 recursion_counter:4;
 
 	/* 2 bit hole */

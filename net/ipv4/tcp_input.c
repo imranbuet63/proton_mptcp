@@ -4794,13 +4794,9 @@ void tcp_data_ready(struct sock *sk)
 	int avail = tp->rcv_nxt - tp->copied_seq;
 
 	if (avail < sk->sk_rcvlowat && !tcp_rmem_pressure(sk) &&
-<<<<<<< HEAD
-	    !sock_flag(sk, SOCK_DONE))
-=======
 	    !sock_flag(sk, SOCK_DONE) &&
 	    tcp_receive_window(tp) > inet_csk(sk)->icsk_ack.rcv_mss &&
 	    !mptcp(tp))
->>>>>>> 9ca1ffce99bfb15c5447a376a449780cd4c8b042
 		return;
 
 	sk->sk_data_ready(sk);
@@ -4823,11 +4819,8 @@ static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	skb_dst_drop(skb);
 	__skb_pull(skb, tcp_hdr(skb)->doff * 4);
 
-<<<<<<< HEAD
-=======
 //	tcp_ecn_accept_cwr(sk, skb);
 
->>>>>>> 9ca1ffce99bfb15c5447a376a449780cd4c8b042
 	tp->rx_opt.dsack = 0;
 
 	/*  Queue data for delivery to the user.
