@@ -856,8 +856,7 @@ static inline u32 tcp_min_rtt(const struct tcp_sock *tp)
  * Rcv_nxt can be after the window if our peer push more data
  * than the offered window.
  */
-//static inline u32 tcp_receive_window(const struct tcp_sock *tp)
-static inline u32 tcp_receive_window_now(const struct tcp_sock *tp)
+static inline u32 tcp_receive_window(const struct tcp_sock *tp)
 {
 	s32 win = tp->rcv_wup + tp->rcv_wnd - tp->rcv_nxt;
 

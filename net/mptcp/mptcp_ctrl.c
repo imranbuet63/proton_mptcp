@@ -2115,7 +2115,7 @@ void mptcp_cleanup_rbuf(struct sock *meta_sk, int copied)
 	__u32 rcv_window_now = 0;
 
 	if (copied > 0 && !(meta_sk->sk_shutdown & RCV_SHUTDOWN)) {
-		rcv_window_now = tcp_receive_window_now(meta_tp);
+		rcv_window_now = tcp_receive_window(meta_tp);
 
 		/* Optimize, __mptcp_select_window() is not cheap. */
 		if (2 * rcv_window_now <= meta_tp->window_clamp)
