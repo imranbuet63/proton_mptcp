@@ -57,12 +57,19 @@ static bool mptcp_ratio_is_available(struct sock *sk, const struct sk_buff *skb,
 	unsigned int space, in_flight;
     
     /* shivanga */
-    if (blocked_sk && blocked_sk == sk) return false;
-    /* end: shivanga */
+    if (blocked_sk && blocked_sk == sk) {
+	printk("sk is blocked");
+	return false;
+    }
+	
+
+        /* end: shivanga */
 
     /* swetankk */
-    if (subflow_is_backup(tp)) return false;
-    /* swetankk: end*/
+    if (subflow_is_backup(tp)) {
+	    printk("subflow is backup");
+	    return false;
+    }    /* swetankk: end*/
 
 	// shivanga
 	/*struct net *net;
@@ -94,27 +101,27 @@ static bool mptcp_ratio_is_available(struct sock *sk, const struct sk_buff *skb,
     
 	/* Set of states for which we are allowed to send data */
 	if (!mptcp_sk_can_send(sk)) {
-        printk("mptcp_sk_can_send");
+        printk("mptcp_sk cannot send");
 		return false;
 	}
-    //printk("mptcp_sk_can_send");
+    	printk("mptcp_sk can send");
 
 	/* We do not send data on this subflow unless it is
 	 * fully established, i.e. the 4th ack has been received.
 	 */
 	if (tp->mptcp->pre_established) {
-        printk("tp->mptcp->pre_established");
+        	printk("tp is in PRE_ESTABLISHED state");
 		return false;
-    }
-    //printk("tp->mptcp->pre_established");
+    	}
+    	printk("tp is not in PRE_ESTABLISHED state");
     
 	if (tp->pf) {
-        printk("tp->pf");
+        	printk("tp->pf is set");
 		return false;
     }
     
 
-    //printk("tp->pf");
+    printk("tp->pf is not set");
     
 	if (inet_csk(sk)->icsk_ca_state == TCP_CA_Loss) {
 		/* If SACK is disabled, and we got a loss, TCP does not exit
@@ -141,12 +148,12 @@ static bool mptcp_ratio_is_available(struct sock *sk, const struct sk_buff *skb,
 		/* Make sure that we send in-order data */
 		if (skb && tp->mptcp->second_packet &&
 		    tp->mptcp->last_end_data_seq != TCP_SKB_CB(skb)->seq) {
-            printk("tp->mptcp->fully_established");
+            	printk("tp->mptcp->fully_established is false");
 			return false;
         }
 	}
 
-    //printk("tp->mptcp->fully_established");
+    printk("tp->mptcp->fully_established is true");
 
 	if (!cwnd_test)
 		goto zero_wnd_test;
@@ -170,7 +177,7 @@ zero_wnd_test:
 		return false;
     }
 
-    //printk("mptcp_ratio_is_available: true\n");
+    printk("mptcp_ratio_is_available: true\n");
 	return true;
 }
 
@@ -185,13 +192,17 @@ static int mptcp_ratio_dont_reinject_skb(const struct tcp_sock *tp, const struct
 		mptcp_pi_to_flag(tp->mptcp->path_index) & TCP_SKB_CB(skb)->path_mask;
 }
 
-/* We just look for any subflow that is available */
+/* We just look for any subflow that as available */
 static struct sock *ratio_get_available_subflow(struct sock *meta_sk,
 					     struct sk_buff *skb,
 					     bool zero_wnd_test)
 {
 	const struct mptcp_cb *mpcb = tcp_sk(meta_sk)->mpcb;
-	struct sock *sk, *bestsk = NULL, *backupsk = NULL;
+	//struct sock *sk, *bestsk = NULL, *backupsk = NULL;
+	/*Phuc*/
+	struct sock *sk=NULL, *bestsk = NULL, *backupsk = NULL;
+	struct mptcp_tcp_sock *mptcp;
+	/****/
 
 #ifdef MPTCP_SCHED_PROBE
     struct sock *sk_it;
@@ -213,7 +224,8 @@ static struct sock *ratio_get_available_subflow(struct sock *meta_sk,
     /* Answer data_fin on same subflow!!! */
 	if (meta_sk->sk_shutdown & RCV_SHUTDOWN &&
 	    skb && mptcp_is_data_fin(skb)) {
-		mptcp_for_each_sk(mpcb, sk) {
+		mptcp_for_each_sub(mpcb, mptcp) {
+			struct sock *sk = mptcp_to_sock(mptcp);
 #ifdef MPTCP_SCHED_PROBE
 			if (tcp_sk(sk)->mptcp->path_index == mpcb->dfin_path_index &&
 			    mptcp_ratio_is_available(sk, skb, zero_wnd_test, true)) {
@@ -229,18 +241,19 @@ static struct sock *ratio_get_available_subflow(struct sock *meta_sk,
 	}
 
 	/* First, find the best subflow */
-	mptcp_for_each_sk(mpcb, sk) {
-		struct tcp_sock *tp = tcp_sk(sk);
-
-		if (!mptcp_ratio_is_available(sk, skb, zero_wnd_test, true))
+	mptcp_for_each_sub(mpcb, mptcp) {
+		/*Phuc*/
+		//sk = mptcp_to_sock(mptcp);
+		struct tcp_sock *tp = tcp_sk(mptcp_to_sock(mptcp));
+		if (!mptcp_ratio_is_available(mptcp_to_sock(mptcp), skb, zero_wnd_test, true))
 			continue;
 
 		if (mptcp_ratio_dont_reinject_skb(tp, skb)) {
-			backupsk = sk;
+			backupsk = mptcp_to_sock(mptcp);
 			continue;
 		}
 
-		bestsk = sk;
+		bestsk = mptcp_to_sock(mptcp);
 	}
 
 	if (bestsk) {
@@ -344,7 +357,9 @@ static struct sk_buff *mptcp_ratio_next_segment(struct sock *meta_sk,
 					     unsigned int *limit)
 {
 	const struct mptcp_cb *mpcb = tcp_sk(meta_sk)->mpcb;
-	struct sock *sk_it, *choose_sk = NULL;
+	//struct sock *sk_it, *choose_sk = NULL;
+	struct sock *choose_sk=NULL;
+	struct mptcp_tcp_sock *mptcp;
 	struct sk_buff *skb = __mptcp_ratio_next_segment(meta_sk, reinject);
 	unsigned int split = num_segments;
 	unsigned char iter = 0, full_subs = 0, counter = 0, i = 0;
@@ -572,7 +587,9 @@ static struct sk_buff *mptcp_ratio_next_segment(struct sock *meta_sk,
 
 retry:
 	/* First, we look for a subflow who is currently being used */
-	mptcp_for_each_sk(mpcb, sk_it) {
+	//mptcp_for_each_sk(mpcb, mk_it) {
+	mptcp_for_each_sub(mpcb, mptcp) {
+		struct sock *sk_it = mptcp_to_sock(mptcp);
 		struct tcp_sock *tp_it = tcp_sk(sk_it);
 		struct ratio_sched_priv *rsp = ratio_sched_get_priv(tp_it);
 	    const struct inet_sock *inet = inet_sk(sk_it);
@@ -649,7 +666,9 @@ retry:
 		/* So, we restart this round by setting quota to 0 and retry
 		 * to find a subflow.
 		 */
-		mptcp_for_each_sk(mpcb, sk_it) {
+		//mptcp_for_each_sk(mpcb, sk_it) {
+		mptcp_for_each_sub(mpcb, mptcp) {
+			struct sock *sk_it = mptcp_to_sock(mptcp);
 			struct tcp_sock *tp_it = tcp_sk(sk_it);
 			struct ratio_sched_priv *rsp = ratio_sched_get_priv(tp_it);
 
@@ -884,21 +903,21 @@ found:
                 struct tcp_sock *tp_it_temp = tcp_sk(sk_it);
                 struct ratio_sched_priv *rsp_temp = ratio_sched_get_priv(tp_it_temp);
                 u32 subflow_rate, subflow_intv, curr_tstamp;
-           		u64 subflow_rate64 = 0;
-				do_div(rsp_temp->buffer_size, meta_tp->delivered);
-				curr_tstamp = jiffies;
-				subflow_rate = tp_it_temp->delivered - tp_it_temp->prev_tx_bytes;
-				tp_it_temp->prev_tx_bytes = tp_it_temp->delivered;
-				subflow_intv = jiffies_to_msecs(curr_tstamp - tp_it_temp->prev_tstamp);
-				tp_it_temp->prev_tstamp = curr_tstamp;
-				subflow_rate64 = (u64)subflow_rate * tp_it_temp->mss_cache * 8 * MSEC_PER_SEC;
-				do_div(subflow_rate64, subflow_intv);
-				do_div(subflow_rate64, 1000000);
-				//if (tp_it_temp->rate_est_cnt != 0)
-		   		 //do_div(tp_it_temp->rate_est_val, tp_it_temp->rate_est_cnt);
-				//tput[iter] = tp_it_temp->rate_est_val;
-				tput[iter] = subflow_rate64;
-				meta_tp->rate_delivered += tput[iter];
+           	u64 subflow_rate64 = 0;
+		do_div(rsp_temp->buffer_size, meta_tp->delivered);
+		curr_tstamp = jiffies;
+		subflow_rate = tp_it_temp->delivered - tp_it_temp->prev_tx_bytes;
+		tp_it_temp->prev_tx_bytes = tp_it_temp->delivered;
+		subflow_intv = jiffies_to_msecs(curr_tstamp - tp_it_temp->prev_tstamp);
+		tp_it_temp->prev_tstamp = curr_tstamp;
+		subflow_rate64 = (u64)subflow_rate * tp_it_temp->mss_cache * 8 * MSEC_PER_SEC;
+		do_div(subflow_rate64, subflow_intv);
+		do_div(subflow_rate64, 1000000);
+		//if (tp_it_temp->rate_est_cnt != 0)
+		    //do_div(tp_it_temp->rate_est_val, tp_it_temp->rate_est_cnt);
+		//tput[iter] = tp_it_temp->rate_est_val;
+		tput[iter] = subflow_rate64;
+		meta_tp->rate_delivered += tput[iter];
                 //tput[loop_counter] = (tp_it_temp->snd_una - rsp_temp->snd_una_saved)*8;
                 //do_div(tput[loop_counter], 100000);
                 //printk("%u: snd_una_tput: %u", loop_counter+1, tput[loop_counter]);
@@ -920,11 +939,11 @@ found:
             //}
             //loop_counter = 0;
  	    if (inet_sk(meta_sk)->inet_daddr)
-				printk("daddr: %pI4, num_samples: %u, ratio: %d, rate_ad: %u, rate_ac: %u, rate_total: %u\n", &inet_sk(meta_sk)->inet_daddr, meta_tp->delivered, meta_tp->num_segments_flow_one, tput[0], tput[1], meta_tp->rate_delivered);
-        else
-	    		printk("daddr NULL, num_samples: %u, ratio: %d, rate_ad: %u, rate_ac: %u, rate_total: %u\n", meta_tp->delivered, meta_tp->num_segments_flow_one, tput[0], tput[1], meta_tp->rate_delivered);
+		printk("daddr: %pI4, num_samples: %u, ratio: %d, rate_ad: %u, rate_ac: %u, rate_total: %u\n", &inet_sk(meta_sk)->inet_daddr, meta_tp->delivered, meta_tp->num_segments_flow_one, tput[0], tput[1], meta_tp->rate_delivered);
+            else
+	    	printk("daddr NULL, num_samples: %u, ratio: %d, rate_ad: %u, rate_ac: %u, rate_total: %u\n", meta_tp->delivered, meta_tp->num_segments_flow_one, tput[0], tput[1], meta_tp->rate_delivered);
  
-        printk("rate_thresh_cnt: %d, buffer_thresh_cnt: %d, count_init: %u, last_rate: %u, last_trigger_tstamp: %u\n", threshold_cnt, buffer_threshold_cnt, count_set_init_rate, last_rate, last_trigger_tstamp);
+            printk("rate_thresh_cnt: %d, buffer_thresh_cnt: %d, count_init: %u, last_rate: %u, last_trigger_tstamp: %u\n", threshold_cnt, buffer_threshold_cnt, count_set_init_rate, last_rate, last_trigger_tstamp);
             //else
                 //printk("ratio:%u, meta_rate: %u, cnt: %d, curr_diff: %d, rate_ad: %u, rate_ac: %u, count_init: %u, last_rate: %u, last_trigger_tstamp: %u\n", sysctl_num_segments_flow_one, meta_tp->rate_delivered, threshold_cnt, meta_tp->undo_retrans, meta_tp->high_seq, meta_tp->undo_marker, count_set_init_rate, last_rate, last_trigger_tstamp);
 
