@@ -361,6 +361,7 @@ int tcp_xmit_probe_skb(struct sock *sk, int urgent, int mib);
 void tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb);
 int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 		     gfp_t gfp_mask);
+u32 tcp_tso_segs(struct sock *sk, unsigned int mss_now);
 unsigned int tcp_mss_split_point(const struct sock *sk,
 				 const struct sk_buff *skb,
 				 unsigned int mss_now,
@@ -855,11 +856,38 @@ static inline u32 tcp_min_rtt(const struct tcp_sock *tp)
  * Rcv_nxt can be after the window if our peer push more data
  * than the offered window.
  */
-static inline u32 tcp_receive_window(const struct tcp_sock *tp)
+//static inline u32 tcp_receive_window(const struct tcp_sock *tp)
+static inline u32 tcp_receive_window_now(const struct tcp_sock *tp)
 {
 	s32 win = tp->rcv_wup + tp->rcv_wnd - tp->rcv_nxt;
 
 	if (win < 0)
+		win = 0;
+	return (u32) win;
+}
+
+/* right edge only moves forward, even if window shrinks due
+ * to mptcp meta
+ */
+static inline void tcp_update_rcv_right_edge(struct tcp_sock *tp)
+{
+	if (after(tp->rcv_wup + tp->rcv_wnd, tp->rcv_right_edge))
+		tp->rcv_right_edge = tp->rcv_wup + tp->rcv_wnd;
+}
+
+/* Compute receive window which will never shrink. The way MPTCP handles
+ * the receive window can cause the effective right edge to shrink,
+ * causing valid segments to become out of window.
+ * This function should be used when checking if a segment is valid for
+ * the max right edge announced.
+ */
+static inline u32 tcp_receive_window_no_shrink(const struct tcp_sock *tp)
+{
+	s32 win = tp->rcv_right_edge - tp->rcv_nxt;
+
+	win = max_t(s32, win, tp->rcv_wup + tp->rcv_wnd - tp->rcv_nxt);
+
+	if (unlikely(win < 0))
 		win = 0;
 	return (u32) win;
 }
@@ -1549,10 +1577,22 @@ static inline int tcp_full_space(const struct sock *sk)
  * SO_RCVLOWAT constraint, since we are receiving skbs with too small
  * len/truesize ratio.
  */
+//static inline bool tcp_rmem_pressure(const struct sock *sk)
+//{
+//	int rcvbuf = READ_ONCE(sk->sk_rcvbuf);
+//	int threshold = rcvbuf - (rcvbuf >> 3);
+//
+//	return atomic_read(&sk->sk_rmem_alloc) > threshold;
+//}
 static inline bool tcp_rmem_pressure(const struct sock *sk)
 {
-	int rcvbuf = READ_ONCE(sk->sk_rcvbuf);
-	int threshold = rcvbuf - (rcvbuf >> 3);
+	int rcvbuf, threshold;
+
+	if (tcp_under_memory_pressure(sk))
+		return true;
+
+	rcvbuf = READ_ONCE(sk->sk_rcvbuf);
+	threshold = rcvbuf - (rcvbuf >> 3);
 
 	return atomic_read(&sk->sk_rmem_alloc) > threshold;
 }
@@ -2042,7 +2082,7 @@ static inline u32 tcp_notsent_lowat(const struct tcp_sock *tp)
 	struct net *net = sock_net((struct sock *)tp);
 	return tp->notsent_lowat ?: net->ipv4.sysctl_tcp_notsent_lowat;
 }
-
+//Should I change this to READ ONCE?
 static inline bool tcp_stream_memory_free(const struct sock *sk)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -2160,6 +2200,7 @@ void tcp_mark_skb_lost(struct sock *sk, struct sk_buff *skb);
 void tcp_newreno_mark_lost(struct sock *sk, bool snd_una_advanced);
 extern s32 tcp_rack_skb_timeout(struct tcp_sock *tp, struct sk_buff *skb,
 				u32 reo_wnd);
+//Should I change this to bool?
 extern void tcp_rack_mark_lost(struct sock *sk);
 extern void tcp_rack_advance(struct tcp_sock *tp, u8 sacked, u32 end_seq,
 			     u64 xmit_time);
