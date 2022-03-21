@@ -696,7 +696,7 @@ found:
 					goto search_start;
 				}
 
-				if (buffer_threshold_cnt == 5 || threshold_cnt == 3) {
+				if (buffer_threshold_cnt == 5 || threshold_cnt == 5) {
 					mptcp_for_each_sub(mpcb, mptcp) {
 						struct sock *sk_it = mptcp_to_sock(mptcp);
 						if (tcp_in_slow_start(tcp_sk(sk_it))) {
@@ -716,7 +716,7 @@ search_start:
 					{
 						printk("DECREASED SEND QUEUE\n");
 					}
-					else if(threshold_cnt==3)
+					else if(threshold_cnt==5)
 					{
 						printk("DECREASED THROUGHPUT\n");
 					}
@@ -730,8 +730,8 @@ search_start:
 					threshold_cnt = 0;
 					buffer_threshold_cnt = 0;
 
-					/*Double sampling interval*/
-					meta_tp->ratio_rate_sample = meta_tp->ratio_rate_sample*2;
+					/*Multiply sampling interval*/
+					meta_tp->ratio_rate_sample = meta_tp->ratio_rate_sample*4;
 					last_trigger_tstamp = jiffies;
 
 					if (meta_tp->num_segments_flow_one < (100 - abs(meta_tp->ratio_search_step))) {
