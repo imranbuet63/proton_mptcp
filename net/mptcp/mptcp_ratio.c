@@ -567,8 +567,8 @@ found:
 		
 
 		time_diff = jiffies_to_msecs(jiffies - meta_tp->rate_interval_us);    
-		/*Cut the first 200ms when we are searching*/
-		if(time_diff >= 200){
+		/*Cut the first 400ms when we are searching*/
+		if(time_diff >= 400){
 			/*Calculate # of ACKs for each interface*/
 			mptcp_for_each_sub(mpcb, mptcp) {
 				struct sock *sk_it = mptcp_to_sock(mptcp);
@@ -614,8 +614,8 @@ found:
 				tp_it_temp->prev_tstamp = curr_tstamp;
 				subflow_rate64 = (u64)subflow_rate * tp_it_temp->mss_cache * 8 * MSEC_PER_SEC;
 				if(in_search==1)
-					//We cut the first 200 ms
-					subflow_intv -= 200;
+					//We cut the first 400 ms
+					subflow_intv -= 400;
 				do_div(subflow_rate64, subflow_intv);
 				do_div(subflow_rate64, 1000000);//subflow_intv is in us
 				srtt[iter] = tp_it_temp->srtt_us>>3;
