@@ -330,10 +330,12 @@ static struct sk_buff *mptcp_ratio_next_segment(struct sock *meta_sk,
 	u32 srtt[2]={0xffffffff,0xffffffff};
 	u32 min_rtt[2]={0xffffffff,0xffffffff};
 	u32 num_acks[2]={0,0};
+	u32 num_acks_head[2]={0,0};
 	int rate_diff, buffer_diff;
 	int rate_diff_sub[2] = {0,0};
 	int buffer_sub[2] = {0,0};
 	u32 last_buffer_size[2] = {0, 0}, init_buffer_size[2] = {0, 0}, tput[2] = {0, 0};
+	u16 head_length;
 	u8 threshold_cnt;
 	u8 buffer_threshold_cnt;
 	unsigned int time_diff, loop_counter = 0;
@@ -567,18 +569,23 @@ found:
 		
 
 		time_diff = jiffies_to_msecs(jiffies - meta_tp->rate_interval_us);    
-		/*Cut the first 400ms when we are searching*/
-		if(time_diff >= 400){
-			/*Calculate # of ACKs for each interface*/
+		meta_tp->head_length = meta_tp->ratio_rate_sample/2;
+		if(time_diff== meta_tp->head_length && meta_tp->lost){
+			in_search = meta_tp->lost;
+			//printk("Time elapsed since last change: %u", time_diff);
+			iter = 0;
 			mptcp_for_each_sub(mpcb, mptcp) {
 				struct sock *sk_it = mptcp_to_sock(mptcp);
 				struct tcp_sock *tp_it_temp = tcp_sk(sk_it);
-				if(in_search)
-				num_acks[iter] = tp_it_temp->delivered - tp_it_temp->prev_tx_bytes;//number of ACKs came back
+				u32 subflow_rate;
+				subflow_rate = tp_it_temp->delivered - tp_it_temp->prev_tx_bytes;
+				meta_tp->num_acks_head[iter] = subflow_rate;
 				iter++;
-			}/*Calculate # of ACKs for each interface*/
-
+			}
+			//	printk("Number of ACKs collected: %u", 
+			//		meta_tp->num_acks_head[0] + meta_tp->num_acks_head[1]);
 		}
+
 		/*start dynamic ratio search*/
 		if (time_diff >= meta_tp->ratio_rate_sample) {
 			/*Load parameter from previous probe interval*/
@@ -590,6 +597,12 @@ found:
 			last_trigger_tstamp = meta_tp->prior_ssthresh;
 			count_set_init_rate = meta_tp->total_retrans;
 			init_rate = meta_tp->prior_cwnd;
+
+			num_acks_head[0] = (in_search==0)? 0: meta_tp->num_acks_head[0];
+			num_acks_head[1] = (in_search==0)? 0: meta_tp->num_acks_head[1];
+			head_length = (num_acks_head[0]==0)? 0:meta_tp->head_length;
+			//printk("head_length this period: %u, since search is %d",
+			//	       	head_length, in_search);
 			memcpy(init_buffer_size, meta_tp->init_buffer_size, 2*sizeof(u32));
 			memcpy(last_buffer_size, meta_tp->last_buffer_size, 2*sizeof(u32));
 			/*End loading*/
@@ -607,15 +620,16 @@ found:
 				do_div(rsp_temp->buffer_size, meta_tp->delivered);
 				do_div(buffer_sub[iter], 1000);//KB
 				curr_tstamp = jiffies;
-				subflow_rate = tp_it_temp->delivered - tp_it_temp->prev_tx_bytes-num_acks[iter];//number of ACKs came back
+				//printk("Original ACKs %llu", tp_it_temp->delivered-
+				//		tp_it_temp->prev_tx_bytes);
+				subflow_rate = tp_it_temp->delivered - tp_it_temp->prev_tx_bytes - num_acks_head[iter];//number of ACKs came back
+				//printk("Deducted ACKs: %u", subflow_rate);
 				num_acks[iter] = subflow_rate;
 				tp_it_temp->prev_tx_bytes = tp_it_temp->delivered;
-				subflow_intv = jiffies_to_msecs(curr_tstamp - tp_it_temp->prev_tstamp);
+				subflow_intv = jiffies_to_msecs(curr_tstamp 
+						- tp_it_temp->prev_tstamp)-head_length;
 				tp_it_temp->prev_tstamp = curr_tstamp;
 				subflow_rate64 = (u64)subflow_rate * tp_it_temp->mss_cache * 8 * MSEC_PER_SEC;
-				if(in_search==1)
-					//We cut the first 400 ms
-					subflow_intv -= 400;
 				do_div(subflow_rate64, subflow_intv);
 				do_div(subflow_rate64, 1000000);//subflow_intv is in us
 				srtt[iter] = tp_it_temp->srtt_us>>3;
